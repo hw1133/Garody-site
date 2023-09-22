@@ -1,0 +1,223 @@
+---
+title: "Capstone"
+author: "Hannah Wilson"
+date: "3/11/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r i}
+library(readxl)
+library(cfcdae)
+library(car)
+library(nlme)
+dataA <- read_excel("C:/Users/hanna/OneDrive/Documents/Hannah1.xlsx", sheet="A")
+dataB <-read_excel("C:/Users/hanna/OneDrive/Documents/Hannah1.xlsx", sheet="B")
+```
+
+## Set up Initial Factors
+```{r 1a}
+data1 <- na.exclude(dataA)
+block.f <- as.factor(data1$ExcavBlock)
+levels(block.f)
+geo.f <- as.factor(data1$Geostrat)
+levels(geo.f)
+lev.f <- as.factor(data1$Level)
+levels(lev.f)
+```
+
+```{r 1b}
+lev.f2 <- as.factor(data1$Level.G)
+levels(lev.f2)
+geo.f2 <- as.factor(data1$Geostrat.G)
+levels(geo.f2)
+block.f2 <- as.factor(data1$Excav.G)
+levels(block.f2)
+```
+
+## Visual Representations of Difference
+```{r 2a}
+par(family = "serif")
+windowsFonts(A = windowsFont("Times New Roman"))
+boxplot(break1~block.f2, data=data1, cex.axis=0.6, main="Excavation Block", xlab="Level", ylab="Angle", col="orange")
+par(family = "serif")
+boxplot(break1~geo.f2, data=data1, cex.axis=0.6, main="Geostrata", xlab="Level", ylab="Angle", col="light blue")
+```
+
+The box plots show that the means of each block and geostrata are at least slightly different: they also have very different ranges, which could signal unequal variance. The plot for the geostrata seems to have more variation present than the block factor.
+
+## Tests for Assumptions
+
+To have an accurate test, the assumptions of independence, normality, and equal variance must be met or otherwise accounted for. 
+
+The independence assumption is met, because the angles of each bone measured don't depend on the other bones. 
+
+To test for normality and equal variance, we look at residual plots.
+```{r 1d}
+bone.mod1 <- lm(break1~block.f+geo.f, data=data1)
+bonegroup.mod1 <- lm(break1~block.f2+geo.f2, data=data1)
+par(mfrow=c(2,2))
+par(family="serif")
+plot(bonegroup.mod1)
+par(mfrow=c(2,2))
+plot(bone.mod1)
+outlierTest(bone.mod1)
+outlierTest(bonegroup.mod1)
+```
+Unfortunately, it looks like we do have some problems. The grouping of data near the center of the first plot is not that big of a concern, but the non-flat line in the scale-location plot indicates that we do have unequal variance problems. This could be due to an outlier, but the outlier test shows no evidence for this. The normal plot is pretty good, but we have slight evidence of long tails. 
+
+To further test the possibility of unequal variance, we need to fit the factors against the residuals. Then, the anova test will be looking at the variances between factor levels versus the means between factor levels. If the test is significant, then we know we have unequal variance. 
+
+```{r 3a}
+resid1 <- resid(bonegroup.mod1)
+bone.residmod1 <- lm(abs(resid1)~block.f2+geo.f2, data=data1)
+par(family="serif")
+par(mfrow=c(1,2))
+plot(bone.residmod1, which=1:2)
+bone.residmod2 <- lm(sqrt(abs(resid1))~block.f2+geo.f2, data=data1)
+plot(bone.residmod2, which=1:2)
+outlierTest(bone.residmod2)
+```
+
+The same methods apply for this ANOVA test - we look at residual plots, make transformations to meet our assumptions, and test for outliers. There is no significant evidence for outliers in the residual model. The square root transformation made the normality much better, and the absolute value of the residuals looks like the original distribution: this is acceptable for analysis.
+
+```{r 3f}
+anova(bone.residmod2)
+```
+
+This ANOVA was conducted specifically to test the equality of variance between the factor levels of geo.f2 and block.f2. Because they are significant in this test, we do have unequal variance. This means that an ANOVA test on the model with the factors included will not be accurate: we need to pursue a model that fits variances separately. 
+
+## Separate Variance Model
+
+```{r 5}
+dataG<- read_excel("C:/Users/hanna/OneDrive/Documents/Hannah2.xlsx")
+geo.g <- as.factor(dataG$Geo.G)
+par(family = "serif")
+boxplot(break1~geo.g, data=dataG, main="Grouped Geostrata", xlab="Level", ylab="Angle", cex.axis=0.6, col="steelblue2")
+geo.g1 <- gls(break1~geo.g, data=dataG, weights=varIdent(form=~1|geo.g))
+summary(geo.g1)
+anova(geo.g1)
+```
+
+For the separate variance model of geostrata, the levels of "A" and "2" were removed because they each had too few data points for this model to work. The remaining levels of geostrata are shown in the boxplot. 
+
+The ANOVA for this model has a high p-value of 0.4979, which means that significant differences between the levels of geostrata were not detected in this sample. The break angles do not significantly differ in the separate geostrata classifications and can be analyzed together, as one group, in the future. 
+
+```{r 6}
+block.g <- as.factor(dataG$Excav.G)
+par(family="serif")
+boxplot(break1~block.g, data=dataG, main="Grouped Excavation Block", xlab="Level", ylab="Angle", cex.axis=0.6, col="seagreen")
+block.g1 <- gls(break1~block.g, data=dataG, weights=varIdent(form=~1|block.g))
+anova(block.g1)
+```
+
+Similarly, the ANOVA for the excavation block levels has a very high p-value. No significant differences were found between the levels, so they can be used as one group in further analysis.
+
+## Within Block 2
+
+Because Block 2 is the largest contributor to our sample, geostrata differences within this block were of interest. The process is the same as for the larger models. 
+
+```{r 9}
+dataC <- read_excel("C:/Users/hanna/OneDrive/Documents/Hannah1.xlsx", sheet="C")
+dataC1 <- na.exclude(dataC)
+```
+
+```{r 10}
+block2.mod <- lm(Break~Geostrat, data=dataC1)
+par(family="serif")
+boxplot(Break~Geostrat, data=dataC1, main="Geostrata in Block 2", xlab="Level", ylab="Angle", cex.axis=0.6, col="sienna2")
+par(mfrow=c(2,2))
+plot(block2.mod)
+```
+
+Looking at the boxplot and Scale-Location plot, the unequal variance problem from the earlier models seems to also extend here, so we will use the same technique of testing for unequal variance and then fitting variances separately if we do indeed have problems meeting the equal variance assumption.
+
+```{r 11}
+resid2 <- resid(block2.mod)
+block2.residmod <- lm(abs(resid2)~Geostrat, data=dataC1)
+par(mfrow=c(1,2))
+plot(bone.residmod1, which=1:2)
+block2.residmod2 <- lm(sqrt(abs(resid2))~Geostrat, data=dataC1)
+plot(block2.residmod2, which=1:2)
+outlierTest(block2.residmod2)
+anova(block2.residmod2)
+```
+With Geostrat plotted against break angles, we see that the sqaure root transformation really helps the data to meet the assumptions necessary for ANOVA. The second group of plots shows much better equal variance and normality than the first group.
+
+This time, the p-value is not significant, and shows that equal variance is not an issue for htis model. Because of this, we can use a regular ANOVA without variances fitted separately. 
+
+```{r 12}
+anova(block2.mod)
+```
+
+We get a very high p-value: within Excavation Block 2, the break angles are not significantly different in each level of geostrata.
+
+## Similarity to Hyenas
+
+Following a procedure set out in _____ by Coil et al, this histogram shows the absolute value of the angle distances from 90. The plot looks fairly similar to one included in the research. 
+
+```{R 1i}
+A <- abs(data1$break1-90)
+par(family="serif")
+hist(A, breaks=7, col="maroon", main="Oblique Fracture Distances from 90 Degrees", xlab="Distance in Degrees from 90", ylab="% of Sample")
+```
+
+```{r 1j}
+data2 <- read_excel("C:/Users/hanna/OneDrive/Documents/Hyena Breakage Angles.xlsx", sheet= "Obl Angles")
+```
+
+To compare the angles of hyena breakage to the site, we would want to use a t test. However, assumptions still apply, so we have to look into those. 
+
+We know that the samples are independent of each other, and we will use a simplistic measure of equal variance for the lists of data. The normality can be assessed using histograms.
+
+```{r 7}
+(sd(data2$Break1A)^2)/(sd(data1$break1)^2)
+par(family="serif")
+hist(data2$Break1A, breaks=13, main="Hyena Breakage Angles", xlab="Angle", ylab="% of Sample", col="slategray2")
+hist(data1$break1, main="Dmanisi Breakage Angles", xlab="Angle", ylab="% of Sample", col="coral1")
+```
+
+The ratio of the hyena variance over the site variance is less than 4, so we can assume equal variance. The histograms, however, show that the hyena data is not normally distributed, so we need to use a test similar to a t-test, but one that does not need normality as an assumption.
+
+```{r 2}
+stats::wilcox.test(data2$Break1A,data1$break1)
+par(mfrow=c(1,2))
+par(family="serif")
+boxplot(data1$break1, main="Dmanisi", ylab="Angle", col="coral1")
+boxplot(data2$Break1A, main="Hyena", col="slategray2")
+```
+
+The Wilcoxon Test shows no significant difference between the full means of our site versus hyena breakage. However, because the hyena breakage data has such a large range, it coul dbe useful to separate the acute and obtuse angles from each sample and look at their comparisons separately.
+
+```{r 8}
+par(mfrow=c(2,2))
+par(family="serif")
+hist(dataB$Acute1, main="Dmanisi Acute", xlab="Angle", col="coral1", ylab="% of Sample")
+hist(data2$Acute, main="Hyena Acute", xlab="Angle", col="slategray2", ylab="% of Sample")
+hist(dataB$Obtuse1, main="Dmanisi Obtuse", xlab="Angle", col="coral1", ylab="% of Sample")
+hist(data2$Obtuse, main="Hyena Obtuse", xlab="Angle", col="slategray2", ylab="% of Sample")
+```
+
+The histograms show that we still don't meet the normality assumption, so we will still use the Wilcoxon Test.
+
+```{r 1k}
+wilcox.test(dataB$Acute1, data2$Acute)
+par(mfrow=c(1,2))
+par(family="serif")
+boxplot(dataB$Acute1, main="Dmanisi Acute", ylab="Angle", col="coral1")
+boxplot(data2$Acute, main="Hyena Acute", ylab="Angle", col="slategray2")
+wilcox.test(dataB$Obtuse1, data2$Obtuse)
+par(mfrow=c(1,2))
+boxplot(dataB$Obtuse1, main="Dmanisi Obtuse", ylab="Angle", col="coral1")
+boxplot(data2$Obtuse, main="Hyena Obtuse", ylab="Angle", col="slategray2")
+```
+
+When comparing the acute angles from our site to the acute angles of the hyena site, the test is significant. The acute breakage angles from each sample are significantly different and not comparable. 
+
+Similarly, the obtuse angles from each sample were significantly different.
+
+These results suggest that the breakage angles found at the site are not statistically similar to hyena breakge from another study.
+
